@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+  <meta name="theme-color" content="#6C4AB6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="2026 광주서창억새노을마라톤 SUNSET RUN — 해온이와 함께 영산강 억새노을길을 달리는 게임">
+  <meta property="og:title" content="2026 광주서창억새노을마라톤 SUNSET RUN 게임">
+  <meta property="og:description" content="해온이와 함께 상무시민공원에서 서창억새축제장까지! 2026. 10. 17.(토) 16:00">
+  <meta property="og:image" content="TemplateData/icon.png">
+  <title>SUNSET RUN · 2026 광주서창억새노을마라톤</title>
+  <link rel="icon" type="image/png" href="TemplateData/icon.png">
+  <link rel="apple-touch-icon" href="TemplateData/icon.png">
+  <link rel="stylesheet" href="TemplateData/style.css">
+</head>
+<body>
+  <div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+  </div>
+
+  <!-- 로딩 / 시작 화면 -->
+  <div id="sr-overlay">
+    <div class="sr-sun"></div>
+    <div class="sr-grass"></div>
+    <div id="sr-card">
+      <div class="sr-tag">#착한도시 서구</div>
+      <div class="sr-name">2026 광주서창억새노을마라톤</div>
+      <img class="sr-logo" src="TemplateData/logo.png" alt="SUNSET RUN">
+      <div class="sr-date"><b>2026. 10. 17</b><sup>SAT</sup> 16:00 - 18:00</div>
+      <div class="sr-course">10km · 5km &nbsp;|&nbsp; 상무시민공원 ▶ 서창억새축제장</div>
+      <img class="sr-haeon" src="TemplateData/haeon.png" alt="해온이">
+      <div id="sr-loading">
+        <div id="sr-bar"><div id="sr-fill"></div></div>
+        <div id="sr-pct">불러오는 중… 0%</div>
+      </div>
+      <button id="sr-start" type="button" hidden>
+        <span class="sr-start-main">화면을 터치해 시작</span>
+        <span class="sr-start-sub">(소리 켜기)</span>
+      </button>
+      <div id="sr-tip">해온이와 함께 영산강 억새노을길을 달려요!</div>
+    </div>
+  </div>
+  <div id="unity-warning"></div>
+
+  <script>
+    (function () {
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var overlay = document.querySelector("#sr-overlay");
+      var fill = document.querySelector("#sr-fill");
+      var pct = document.querySelector("#sr-pct");
+      var startBtn = document.querySelector("#sr-start");
+      var loading = document.querySelector("#sr-loading");
+      var tip = document.querySelector("#sr-tip");
+      var warningBanner = document.querySelector("#unity-warning");
+      var isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) ||
+                     (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
+      // 에러/경고 배너(Unity 기본 기능)
+      function unityShowBanner(msg, type) {
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? "block" : "none";
+        }
+        var div = document.createElement("div");
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == "error") div.className = "sr-err";
+        else {
+          if (type == "warning") div.className = "sr-warn";
+          setTimeout(function () { warningBanner.removeChild(div); updateBannerVisibility(); }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      // 로딩 중 한 줄 안내(공식 안내 내용)
+      var tips = [
+        "해온이와 함께 영산강 억새노을길을 달려요!",
+        "대회일: 2026. 10. 17.(토) 16:00 · 상무시민공원 출발",
+        "도착은 서창억새축제장! 경기 후 셔틀버스로 출발지 이동",
+        "달리며 착한도시 서구의 정책 카드를 모아 보세요",
+        "O/X 퀴즈는 O 왼쪽 · X 오른쪽 레인으로!"
+      ];
+      var tipIdx = 0;
+      var tipTimer = setInterval(function () { tipIdx = (tipIdx + 1) % tips.length; tip.textContent = tips[tipIdx]; }, 2800);
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/5.loader.js";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/5.data.unityweb",
+        frameworkUrl: buildUrl + "/5.framework.js.unityweb",
+        codeUrl: buildUrl + "/5.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "전남광주통합특별시 서구",
+        productName: "SUNSET RUN 2026 광주서창억새노을마라톤",
+        productVersion: "0.1.0",
+        showBanner: unityShowBanner,
+        // 캔버스 크기에 맞춰 렌더 해상도 자동 조절. 모바일은 픽셀 밀도를 낮춰 발열·프레임 확보
+        matchWebGLToCanvasSize: true,
+        // 불투명 캔버스: 게임 화면의 반투명(알파) 부분이 웹페이지 배경과 섞여 색이 빠지는 문제 방지
+        webglContextAttributes: { alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: "high-performance" },
+        devicePixelRatio: isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2)
+      };
+
+      if (isMobile) document.body.classList.add("sr-mobile");
+      else document.querySelector(".sr-start-main").textContent = "클릭해서 시작";
+
+      // 페이지 스크롤·확대·길게 누르기 메뉴 막기(게임 조작 방해 방지)
+      document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+      document.addEventListener("dblclick", function (e) { e.preventDefault(); }, { passive: false });
+      canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      document.addEventListener("touchmove", function (e) { if (e.target === canvas) e.preventDefault(); }, { passive: false });
+
+      // WebGL 미지원 안내
+      (function () {
+        var c = document.createElement("canvas");
+        var ok = !!(window.WebGL2RenderingContext && c.getContext("webgl2")) || !!(c.getContext("webgl"));
+        if (!ok) unityShowBanner("이 브라우저는 WebGL 을 지원하지 않아요. 최신 크롬·사파리·엣지에서 열어 주세요.", "error");
+      })();
+
+      var instance = null;
+      function setProgress(p) {
+        var v = Math.max(0, Math.min(1, p));
+        fill.style.width = (v * 100).toFixed(1) + "%";
+        pct.textContent = (v < 0.9 ? "불러오는 중… " : "거의 다 됐어요… ") + Math.round(v * 100) + "%";
+      }
+
+      function showStart() {
+        loading.hidden = true;
+        startBtn.hidden = false;
+        overlay.classList.add("sr-ready");
+        startBtn.focus({ preventScroll: true });
+      }
+
+      function start(e) {
+        if (e) e.preventDefault();
+        overlay.classList.add("sr-hide");
+        clearInterval(tipTimer);
+        setTimeout(function () { overlay.style.display = "none"; }, 450);
+        canvas.focus();
+        // 모바일(안드로이드 등)은 전체화면 시도 — 지원 안 하면 조용히 무시(iPhone 사파리)
+        if (isMobile) {
+          var el = document.documentElement;
+          var req = el.requestFullscreen || el.webkitRequestFullscreen;
+          if (req) { try { var r = req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(function () {}); } catch (err) {} }
+        }
+        // 첫 사용자 입력 → 오디오 잠금 해제(Unity 가 자동으로 AudioContext 재개). 혹시 모를 정지 상태도 재개
+        try {
+          if (window.WEBAudio && WEBAudio.audioContext && WEBAudio.audioContext.state !== "running") WEBAudio.audioContext.resume();
+        } catch (err) {}
+      }
+      startBtn.addEventListener("click", start);
+      overlay.addEventListener("touchend", function (e) { if (overlay.classList.contains("sr-ready")) start(e); }, { passive: false });
+      overlay.addEventListener("click", function (e) { if (overlay.classList.contains("sr-ready") && e.target !== startBtn) start(e); });
+      document.addEventListener("keydown", function (e) {
+        if (overlay.classList.contains("sr-ready") && !overlay.classList.contains("sr-hide") && (e.key === "Enter" || e.key === " ")) start(e);
+      });
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = function () {
+        createUnityInstance(canvas, config, setProgress).then(function (unityInstance) {
+          instance = unityInstance;
+          setProgress(1);
+          showStart();
+        }).catch(function (message) {
+          unityShowBanner("게임을 불러오지 못했어요: " + message, "error");
+        });
+      };
+      script.onerror = function () { unityShowBanner("게임 파일을 찾을 수 없어요(Build 폴더 확인).", "error"); };
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+/* SUNSET RUN WebGL 템플릿 — 전체화면 캔버스 + 노을 로딩/시작 화면 (세로·가로·데스크톱 대응) */
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  overflow: hidden; background: #2a1d4a;
+  overscroll-behavior: none; -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", sans-serif;
+}
+#unity-container { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; }
+#unity-canvas {
+  display: block; width: 100%; height: 100%;
+  /* 게임 화면 뒤는 반드시 불투명 검정: 그라데이션을 두면 반투명 픽셀과 섞여 화면 전체가 뿌옇고 분홍빛이 됨 */
+  background: #000;
+  touch-action: none; outline: none;
+}
+
+/* ---------- 로딩 / 시작 오버레이 ---------- */
+#sr-overlay {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #5b3f9e 0%, #8c6bc8 22%, #f08ba0 52%, #ffb36b 78%, #ffd68a 100%);
+  overflow: hidden; transition: opacity .45s ease;
+}
+#sr-overlay.sr-hide { opacity: 0; pointer-events: none; }
+#sr-overlay.sr-ready { cursor: pointer; }
+.sr-sun {
+  position: absolute; left: 50%; bottom: 14%; width: 38vmin; height: 38vmin; transform: translateX(-50%);
+  border-radius: 50%; background: radial-gradient(circle, #fff3c4 0%, #ffd27a 45%, rgba(255, 190, 110, 0) 70%);
+  animation: sr-glow 4s ease-in-out infinite alternate;
+}
+.sr-grass {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22%;
+  background:
+    linear-gradient(180deg, rgba(120, 70, 90, 0) 0%, rgba(80, 40, 70, .75) 100%);
+}
+#sr-card {
+  position: relative; z-index: 1; box-sizing: border-box;
+  width: min(92vw, 720px); max-height: 96%;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 2vh 16px; color: #fff;
+}
+.sr-tag {
+  font-weight: 800; font-size: clamp(12px, 2vmin, 16px); background: #2fa84f; color: #fff;
+  padding: 4px 12px; border-radius: 999px; margin-bottom: 1.2vh;
+}
+.sr-name {
+  font-weight: 800; color: #1f7a45; background: rgba(255, 253, 244, .96);
+  padding: .3em .9em; border-radius: 999px; font-size: clamp(15px, 3.4vmin, 28px);
+  box-shadow: 0 4px 10px rgba(60, 20, 60, .25);
+}
+.sr-logo { width: min(86vw, 620px); height: auto; margin: 1vh 0 .4vh; filter: drop-shadow(0 6px 10px rgba(60, 20, 40, .25)); }
+.sr-date { font-size: clamp(17px, 3.6vmin, 30px); text-shadow: 0 2px 4px rgba(60, 20, 60, .5); }
+.sr-date b { font-weight: 800; }
+.sr-date sup { font-size: .5em; color: #ffd166; margin: 0 .5em 0 .15em; font-weight: 800; }
+.sr-course { margin-top: .6vh; font-weight: 700; font-size: clamp(13px, 2.6vmin, 20px); text-shadow: 0 2px 4px rgba(60, 20, 60, .5); }
+.sr-haeon { width: clamp(90px, 20vmin, 170px); height: auto; margin: 1.6vh 0 .6vh; animation: sr-bob 1.2s ease-in-out infinite alternate; }
+
+#sr-loading { width: min(80vw, 460px); }
+#sr-bar {
+  height: 16px; border-radius: 999px; background: rgba(35, 25, 66, .45);
+  border: 2px solid rgba(255, 255, 255, .85); overflow: hidden;
+}
+#sr-fill {
+  width: 0%; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #ffc24a, #ff8a3d 55%, #ff5e7e);
+  transition: width .2s ease;
+}
+#sr-pct { margin-top: 8px; font-weight: 700; font-size: clamp(13px, 2.2vmin, 17px); text-shadow: 0 1px 3px rgba(60, 20, 60, .6); }
+
+#sr-start {
+  min-width: 240px; min-height: 64px; padding: 12px 28px; margin-top: .4vh;
+  border: 3px solid #fff; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, #ff9a2e, #e4531b); color: #fff;
+  box-shadow: 0 8px 0 #9c3a14, 0 12px 24px rgba(60, 20, 40, .35);
+  font-family: inherit; display: flex; flex-direction: column; align-items: center; line-height: 1.2;
+  animation: sr-pulse 1.4s ease-in-out infinite;
+}
+#sr-start[hidden] { display: none; }
+.sr-start-main { font-weight: 800; font-size: clamp(19px, 3.6vmin, 28px); }
+.sr-start-sub { font-weight: 700; font-size: clamp(13px, 2.2vmin, 17px); opacity: .92; }
+#sr-tip { margin-top: 1.6vh; font-size: clamp(12px, 2vmin, 16px); font-weight: 600; min-height: 1.4em; text-shadow: 0 1px 3px rgba(60, 20, 60, .6); }
+
+/* 가로가 낮은 화면(휴대폰 가로): 해온이 옆으로, 여백 줄이기 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #sr-card { width: min(96vw, 900px); padding: 1vh 12px; }
+  .sr-logo { width: min(60vw, 480px); margin: .6vh 0 0; }
+  .sr-haeon { position: absolute; right: 2vw; bottom: 2vh; width: 22vh; margin: 0; }
+  .sr-tag { margin-bottom: .6vh; }
+  #sr-tip { margin-top: .8vh; }
+}
+
+/* ---------- 경고 배너 ---------- */
+#unity-warning {
+  position: fixed; left: 50%; top: 5%; transform: translateX(-50%); z-index: 20;
+  display: none; max-width: 90vw; text-align: center; font-size: 15px;
+}
+#unity-warning div { padding: 10px 14px; border-radius: 10px; margin-bottom: 6px; }
+#unity-warning .sr-err { background: #e84545; color: #fff; }
+#unity-warning .sr-warn { background: #ffd166; color: #231942; }
+
+@keyframes sr-bob { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-10px) rotate(3deg); } }
+@keyframes sr-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes sr-glow { from { opacity: .85; } to { opacity: 1; } }
