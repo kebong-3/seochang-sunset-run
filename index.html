@@ -16,6 +16,9 @@
   <link rel="icon" type="image/png" href="TemplateData/icon.png">
   <link rel="apple-touch-icon" href="TemplateData/icon.png">
   <link rel="stylesheet" href="TemplateData/style.css">
+  <script src="Quality/sunset-quality.js?v=4.9.0"></script>
+  <link rel="stylesheet" href="Community/sunset-community.css">
+  <script type="module" src="Community/sunset-community.js?v=4.8.0"></script>
 </head>
 <body>
   <div id="unity-container">
@@ -42,6 +45,7 @@
         <span class="sr-start-sub">(소리 켜기)</span>
       </button>
       <div id="sr-tip">해온이와 함께 영산강 억새노을길을 달려요!</div>
+      <div id="sr-quality-label" style="margin-top:10px;font-size:12px;opacity:.85">고화질 · 게임 안에서 변경할 수 있어요</div>
     </div>
   </div>
   <div id="unity-warning"></div>
@@ -88,24 +92,30 @@
       var tipTimer = setInterval(function () { tipIdx = (tipIdx + 1) % tips.length; tip.textContent = tips[tipIdx]; }, 2800);
 
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/9.loader.js";
+      var loaderUrl = buildUrl + "/10.loader.js";
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/9.data.unityweb",
-        frameworkUrl: buildUrl + "/9.framework.js.unityweb",
-        codeUrl: buildUrl + "/9.wasm.unityweb",
+        dataUrl: buildUrl + "/10.data.unityweb",
+        frameworkUrl: buildUrl + "/10.framework.js.unityweb",
+        codeUrl: buildUrl + "/10.wasm.unityweb",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "전남광주통합특별시 서구",
         productName: "SUNSET RUN 2026 광주서창억새노을마라톤",
         productVersion: "0.1.0",
         showBanner: unityShowBanner,
-        // 캔버스 크기에 맞춰 렌더 해상도 자동 조절. 모바일은 픽셀 밀도를 낮춰 발열·프레임 확보
-        matchWebGLToCanvasSize: true,
+        // v4.9: 선택한 화질의 픽셀 상한으로 직접 크기를 계산. 모바일 강제 저화질 없음
+        matchWebGLToCanvasSize: false,
         // 불투명 캔버스: 게임 화면의 반투명(알파) 부분이 웹페이지 배경과 섞여 색이 빠지는 문제 방지
         webglContextAttributes: { alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: "high-performance" },
-        devicePixelRatio: isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2)
+        devicePixelRatio: window.SR49 ? Math.min(window.devicePixelRatio || 1, window.SR49.profile.dpr) : 1
       };
 
+      if (!window.SR49) {
+        clearInterval(tipTimer);
+        unityShowBanner("화질 설정 파일을 찾지 못했어요. 새 빌드의 Quality 폴더와 index.html을 함께 올려 주세요.", "error");
+        return;
+      }
+      window.SR49.prepare(canvas,container); isMobile=window.SR49.isMobile;
       if (isMobile) document.body.classList.add("sr-mobile");
       else document.querySelector(".sr-start-main").textContent = "클릭해서 시작";
 
@@ -165,6 +175,9 @@
       script.onload = function () {
         createUnityInstance(canvas, config, setProgress).then(function (unityInstance) {
           instance = unityInstance;
+          if (window.SR49) window.SR49.attachUnity(unityInstance);
+          window.sunsetUnity = unityInstance;
+          if (window.SR47) window.SR47.attachUnity(unityInstance);
           setProgress(1);
           showStart();
         }).catch(function (message) {
