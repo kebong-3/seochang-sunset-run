@@ -63,7 +63,7 @@ $('retry').onclick=async()=>{
 };
 if(demo){$('demo').className='demo-banner';$('demo').textContent='디자인 미리보기 · 모든 닉네임과 기록은 예시입니다';$('privacy').textContent='예시 화면에서는 서버에 기록을 저장하지 않습니다.';load(true,true);}
 else{const c=await config();$('scope').textContent=c.event+' / '+c.ruleset;$('privacy').textContent='보관: '+(c.retentionNotice||'운영자 설정 전')+' · 문의: '+(c.contactText||'운영자 설정 전');
- if(!c.enabled){$('notice').hidden=false;$('notice').textContent='온라인 기록판은 아직 연결 전이에요. Firebase·Vercel 설정 후 실제 기록이 표시됩니다. 사진 저장과 게임은 독립적으로 이용할 수 있어요.';$('empty').textContent='서버 연결 전 · 실제 참여 기록 없음';note('랭킹 연동 대기 중');}
+ if(!c.enabled){$('notice').hidden=false;$('notice').textContent='온라인 기록판은 아직 연결 전이에요. Supabase 연결 후 실제 기록이 표시됩니다. 사진 저장과 게임은 독립적으로 이용할 수 있어요.';$('empty').textContent='서버 연결 전 · 실제 참여 기록 없음';note('랭킹 연동 대기 중');}
  else {if(c.acceptResults===false){$('notice').hidden=false;$('notice').textContent='새 기록 등록은 종료되었어요. 기존 기록은 계속 확인할 수 있어요.';}await load(true,true);}
 }
 
