@@ -1,41 +1,34 @@
-// Browser-only API. The Firebase web config is public; service credentials never enter this file.
-const SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
-let cfgPromise, sdkPromise;
-export const local = {
+// SUNSET RUN community API — Supabase Edge Function backend
+const API_URL='https://pkkctlqlhdynoefjlpjg.supabase.co/functions/v1/sunset-ranking-api';
+let cfgPromise;
+export const local={
   get(k,fallback=null){try{return JSON.parse(localStorage.getItem('sr47:'+k))??fallback;}catch{return fallback;}},
   set(k,v){try{localStorage.setItem('sr47:'+k,JSON.stringify(v));}catch{}},
   remove(k){try{localStorage.removeItem('sr47:'+k);}catch{}}
 };
+export function playerId(){
+  let id='';
+  try{id=localStorage.getItem('sr47:player-id')||'';}catch{}
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)){
+    id=crypto.randomUUID?crypto.randomUUID():('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx').replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16);});
+    try{localStorage.setItem('sr47:player-id',id);}catch{}
+  }
+  return id;
+}
 export async function config(){
-  if(!cfgPromise)cfgPromise=fetch('/api/sunset?action=config',{cache:'no-store',signal:AbortSignal.timeout(8000)})
+  if(!cfgPromise)cfgPromise=fetch(API_URL+'?action=config',{cache:'no-store',signal:AbortSignal.timeout(8000)})
     .then(async r=>{if(!r.ok)throw new Error();return r.json();})
-    .catch(()=>({enabled:false,eventTitle:'서창 억새노을런 기록판',event:'local',ruleset:'sr47-v1',retentionNotice:'',contactText:''}));
+    .catch(()=>({enabled:false,eventTitle:'SUNSET RUN 실제 참여자 기록판',event:'sunset-run-2026',ruleset:'sr47-v1',retentionNotice:'',contactText:''}));
   return cfgPromise;
 }
-export async function firebase(){
-  if(!sdkPromise)sdkPromise=(async()=>{
-    const cfg=await config();if(!cfg.enabled)throw new Error('기록판 준비 중이에요. 사진 저장과 자유 플레이는 가능해요.');
-    const [appMod,authMod,checkMod]=await Promise.all([import(SDK+'firebase-app.js'),import(SDK+'firebase-auth.js'),import(SDK+'firebase-app-check.js')]);
-    const app=appMod.getApps()[0]||appMod.initializeApp(cfg.firebase);
-    const auth=authMod.getAuth(app);
-    let ephemeral=false;
-    try{await authMod.setPersistence(auth,authMod.browserLocalPersistence);}catch{ephemeral=true;await authMod.setPersistence(auth,authMod.inMemoryPersistence);}
-    await auth.authStateReady();
-    const appCheck=cfg.appCheckSiteKey?checkMod.initializeAppCheck(app,{provider:new checkMod.ReCaptchaEnterpriseProvider(cfg.appCheckSiteKey),isTokenAutoRefreshEnabled:true}):null;
-    return {cfg,auth,authMod,appCheck,checkMod,ephemeral};
-  })();
-  return sdkPromise;
-}
 export async function api(action,data={},method='GET'){
-  const s=await firebase();
-  const headers={'Content-Type':'application/json'};
-  if(s.auth.currentUser)headers.Authorization='Bearer '+await s.auth.currentUser.getIdToken();
-  if(s.appCheck)headers['X-Firebase-AppCheck']=(await s.checkMod.getToken(s.appCheck,false)).token;
-  const url=new URL('/api/sunset',location.origin);url.searchParams.set('action',action);
+  const headers={'Content-Type':'application/json','X-Sunset-Player':playerId()};
+  const url=new URL(API_URL);url.searchParams.set('action',action);
   if(method==='GET')for(const [k,v] of Object.entries(data))if(v!==null&&v!==undefined)url.searchParams.set(k,String(v));
   let r;
-  try{r=await fetch(url,{method,headers,body:method==='POST'?JSON.stringify(data):undefined,cache:'no-store',signal:AbortSignal.timeout(20000)});}catch{throw new Error('인터넷 연결을 확인한 뒤 다시 시도해 주세요.');}
-  let out;try{out=await r.json();}catch{throw new Error('서버 설정을 확인해 주세요.');}
+  try{r=await fetch(url,{method,headers,body:method==='POST'?JSON.stringify(data):undefined,cache:'no-store',signal:AbortSignal.timeout(20000)});}
+  catch{throw new Error('인터넷 연결을 확인한 뒤 다시 시도해 주세요.');}
+  let out;try{out=await r.json();}catch{throw new Error('기록 서버 설정을 확인해 주세요.');}
   if(!r.ok){const error=new Error(out.message||'기록을 처리하지 못했어요.');error.code=out.error;throw error;}
   return out;
 }
