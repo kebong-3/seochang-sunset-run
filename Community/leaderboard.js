@@ -1,4 +1,4 @@
-import {api,config,firebase,local,time,el,button,friendly} from './community-api.mjs';
+import {api,config,local,playerId,time,el,button,friendly} from './community-api.mjs';
 import {openProfile} from './sunset-community.js';
 const $=id=>document.getElementById(id);
 let course=10,rows=[],cursor=null,busy=false,admin=false,lastLoad=0;
@@ -31,16 +31,14 @@ async function load(reset=true,force=false){
 async function mine(){
  try{
   if(demo){$('my-rank').textContent='4위';$('my-time').textContent='예시 데이터';return;}
-  const s=await firebase();if(!s.auth.currentUser){await openProfile();note('참여자 등록 후 내 기록을 다시 눌러 주세요.');return;}
   const p=await api('me',{course});admin=p.isAdmin===true;draw();
   if(!p.registered){note('닉네임을 등록하고 완주하면 기록이 남아요.');return;}
-  local.set('profile',{nickname:p.nickname,publicId:p.publicId,linked:p.linked,online:true,uid:s.auth.currentUser.uid});
+  local.set('profile',{nickname:p.nickname,publicId:p.publicId,linked:false,online:true,uid:playerId()});
   $('my-rank').textContent=p.rank?p.rank+'위':'미등록';$('my-time').textContent=p.best?time(p.best.virtualMs,true):'이 코스 완주 후 등록';
   const section=$('mine');section.hidden=false;section.replaceChildren(el('h2',p.nickname+'의 최근 완주'));
-  section.append(el('p',p.linked?'Google 계정 연결됨 · 다른 기기에서도 이어서 확인해요.':'임시 계정 · 기기 변경이나 브라우저 데이터 삭제 전에 Google 계정에 연결해 주세요.','fine'));
+  section.append(el('p','이 브라우저의 참여자 ID로 내 기록을 구분해요. 다른 기기에서는 별도 참여자로 시작합니다.','fine'));
   for(const r of p.history){section.append(el('p',`${r.course}km · ${time(r.virtualMs,true)} · ${r.score.toLocaleString()}점 · ${r.status==='accepted'?'등록':'확인 필요'} · ${new Date(r.receivedAtMs).toLocaleDateString('ko-KR')}`));}
   if(!p.history.length)section.append(el('p','아직 저장한 완주가 없어요.'));
-  if(admin){const a=await api('admin');$('admin').hidden=false;$('admin').replaceChildren(el('h2','운영자 대시보드'),el('p',`등록 계정 ${a.registered}개 · `+a.totals.map(t=>`${t.course}km 기록 보유자 ${t.finishers}명`).join(' · ')),el('p','참여 계정 수는 실제 사람 수와 같지 않을 수 있습니다. 목록의 제외 버튼은 운영자 권한을 서버에서 다시 확인합니다.','fine'));}
  }catch(e){note(friendly(e));}
 }
 $('course5').onclick=()=>{if(busy)return;course=5;switchCourse();};$('course10').onclick=()=>{if(busy)return;course=10;switchCourse();};
@@ -59,7 +57,7 @@ $('delete').onclick=async()=>{
 $('retry').onclick=async()=>{
  try{if(demo)return note('예시 화면에는 미전송 기록이 없어요.');const p=local.get('pending');if(!p)return note('미전송 기록이 없어요.');
   if(Date.now()-p.at>86400000){local.remove('pending');return note('24시간이 지나 온라인 등록 대기 정보를 지웠어요. 저장한 PNG는 그대로 남아요.');}
-  const s=await firebase(),c=await config();if(s.auth.currentUser?.uid!==p.uid||c.event!==p.event)throw new Error('경기를 시작했던 계정으로 로그인해 주세요.');
+  const c=await config();if(playerId()!==p.uid||c.event!==p.event)throw new Error('경기를 시작했던 같은 브라우저에서 다시 시도해 주세요.');
   const out=await api('finish',{clientRunId:p.clientRunId,result:p.result},'POST');local.remove('pending');await load(true,true);note(out.message);await mine();
  }catch(e){note(friendly(e));}
 };
@@ -70,9 +68,7 @@ else{const c=await config();$('scope').textContent=c.event+' / '+c.ruleset;$('pr
 }
 
 $('logout').onclick=async()=>{
- if(demo)return note('예시 화면에는 로그인 정보가 없어요.');
- try{const s=await firebase();
-  if(s.auth.currentUser?.isAnonymous && !confirm('임시 계정에서 로그아웃하면 이 기록을 다시 관리하기 어려울 수 있어요. 먼저 Google 계정에 연결하는 것을 권해요. 그래도 로그아웃할까요?'))return;
-  await s.authMod.signOut(s.auth);local.remove('profile');local.remove('pending');admin=false;draw();$('admin').hidden=true;$('mine').hidden=true;$('my-rank').textContent='—';$('my-time').textContent='로그아웃됨';note('이 브라우저에서 로그아웃했어요. 온라인 기록을 삭제한 것은 아니에요.');
- }catch(e){note(friendly(e));}
+ if(demo)return note('예시 화면에는 참여정보가 없어요.');
+ if(!confirm('이 브라우저에서 닉네임 표시만 초기화할까요? 서버의 기존 기록은 삭제되지 않습니다.'))return;
+ local.remove('profile');local.remove('pending');admin=false;draw();$('admin').hidden=true;$('mine').hidden=true;$('my-rank').textContent='—';$('my-time').textContent='참여정보 초기화';note('이 브라우저의 닉네임 표시를 초기화했어요.');
 };
