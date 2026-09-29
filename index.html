@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="TemplateData/style.css">
   <script src="Quality/sunset-quality.js?v=4.9.0"></script>
   <link rel="stylesheet" href="Community/sunset-community.css">
-  <script type="module" src="Community/sunset-community.js?v=4.8.0"></script>
+  <script type="module" src="Community/sunset-community.js?v=supabase-1"></script>
 </head>
 <body>
   <div id="unity-container">
@@ -40,6 +40,15 @@
         <div id="sr-bar"><div id="sr-fill"></div></div>
         <div id="sr-pct">불러오는 중… 0%</div>
       </div>
+      <div id="sr-player-start" hidden style="margin:12px auto 4px;max-width:360px;text-align:left">
+        <label for="sr-nickname" style="display:block;font-size:12px;font-weight:800;margin-bottom:6px">러닝 닉네임</label>
+        <input id="sr-nickname" maxlength="12" value="억새해오니" autocomplete="nickname"
+          style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #d7c8dc;border-radius:12px;font-size:16px;background:#fff;color:#31263d">
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:11px;line-height:1.5">
+          <input id="sr-rank-consent" type="checkbox" checked style="margin-top:2px">
+          <span>닉네임과 완주 기록을 실제 참여자 순위에 공개할게요.</span>
+        </label>
+      </div>
       <button id="sr-start" type="button" hidden>
         <span class="sr-start-main">화면을 터치해 시작</span>
         <span class="sr-start-sub">(소리 켜기)</span>
@@ -58,9 +67,17 @@
       var fill = document.querySelector("#sr-fill");
       var pct = document.querySelector("#sr-pct");
       var startBtn = document.querySelector("#sr-start");
+      var playerStart = document.querySelector("#sr-player-start");
+      var nicknameInput = document.querySelector("#sr-nickname");
+      var rankConsent = document.querySelector("#sr-rank-consent");
       var loading = document.querySelector("#sr-loading");
       var tip = document.querySelector("#sr-tip");
       var warningBanner = document.querySelector("#unity-warning");
+      try {
+        var savedProfile = JSON.parse(localStorage.getItem("sr47:profile") || "null");
+        if (savedProfile && savedProfile.nickname) nicknameInput.value = savedProfile.nickname;
+        if (savedProfile && typeof savedProfile.online === "boolean") rankConsent.checked = savedProfile.online;
+      } catch (e) {}
       var isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) ||
                      (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 
@@ -141,6 +158,7 @@
 
       function showStart() {
         loading.hidden = true;
+        playerStart.hidden = false;
         startBtn.hidden = false;
         overlay.classList.add("sr-ready");
         startBtn.focus({ preventScroll: true });
@@ -148,6 +166,20 @@
 
       function start(e) {
         if (e) e.preventDefault();
+        var nickname = String(nicknameInput.value || "억새해오니").normalize("NFKC").trim().replace(/ +/g," ");
+        if (!/^[가-힣a-zA-Z0-9 _-]{2,12}$/.test(nickname)) {
+          alert("닉네임은 한글·영문·숫자 2~12자로 적어 주세요.");
+          nicknameInput.focus(); nicknameInput.select(); return;
+        }
+        var pid = "";
+        try { pid = localStorage.getItem("sr47:player-id") || ""; } catch (err) {}
+        if (!/^[0-9a-f-]{36}$/i.test(pid)) {
+          pid = (crypto.randomUUID ? crypto.randomUUID() : ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx").replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==="x"?r:(r&3|8);return v.toString(16);}));
+          try { localStorage.setItem("sr47:player-id", pid); } catch (err) {}
+        }
+        var startProfile = { nickname:nickname, online:!!rankConsent.checked, uid:pid };
+        try { localStorage.setItem("sr47:profile", JSON.stringify(startProfile)); } catch (err) {}
+        if (window.SR47 && window.SR47.setProfileFromStart) window.SR47.setProfileFromStart(startProfile);
         overlay.classList.add("sr-hide");
         clearInterval(tipTimer);
         setTimeout(function () { overlay.style.display = "none"; }, 450);
