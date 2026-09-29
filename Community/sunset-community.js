@@ -1,4 +1,4 @@
-import {config,firebase,api,local,time,el,button,friendly} from './community-api.mjs';
+import {config,api,local,playerId,time,el,button,friendly} from './community-api.mjs';
 const DEFAULT_NICKNAME48='억새해오니';
 function normalizeNickname48(value){return String(value??'').normalize('NFKC').trim().replace(/ +/g,' ')||DEFAULT_NICKNAME48;}
 function validNickname48(value){return /^[가-힣a-zA-Z0-9 _-]{2,12}$/.test(value);}
@@ -25,88 +25,40 @@ function notifyProfile(p){profile=p;local.set('profile',p);send('OnProfile',p);p
 export async function openProfile(){
   profileDone=true;
   const d=modal('내 러닝 닉네임'),body=el('div','','sr47-body');d.append(body);
-  body.append(el('p','내 코디, 내 이름. 완주 사진과 기록판에 이 이름이 함께 남아요.'));
+  body.append(el('p','내 코디, 내 이름. 완주 사진과 실제 참여자 순위에 이 이름이 함께 보여요.'));
   const lab=el('label','닉네임 · 한글·영문·숫자 2~12자');lab.htmlFor='sr47-nick';
   const nick=el('input');nick.type='text';nick.id='sr47-nick';nick.maxLength=12;
   nick.value=profile.nickname||DEFAULT_NICKNAME48;nick.autocomplete='nickname';body.append(lab,nick);
+  const consentLabel=el('label'),consent=el('input');consent.type='checkbox';consent.checked=profile.online!==false;
+  consentLabel.append(consent,document.createTextNode('이 닉네임과 완주 기록을 실제 참여자 순위에 공개해요.'));
+  body.append(consentLabel);
   const message=el('p','','sr47-status');message.setAttribute('role','status');
-  const readNick=()=>{const n=normalizeNickname48(nick.value);
-    if(!validNickname48(n))throw new Error('한글·영문·숫자 2~12자로 적어 주세요.');return n;};
+  const readNick=()=>{const n=normalizeNickname48(nick.value);if(!validNickname48(n))throw new Error('한글·영문·숫자 2~12자로 적어 주세요.');return n;};
   const actions=el('div','','sr47-actions');
-  let cfg=null,sdk=null;
-  const save=button(profile.online?'이 이름으로 기록 이어가기':'이 이름으로 코디하기',async()=>{
+  const save=button('이 이름으로 시작하기',async()=>{
     try{
-      const nickname=readNick();
-      if(!profile.online){notifyProfile({...profile,nickname,online:false});return;}
-      // Never silently drop an existing linked identity while changing only its public name.
-      save.disabled=true;message.textContent='기존 계정의 닉네임을 저장 중이에요…';
-      cfg=cfg||await config();if(!cfg.enabled)throw new Error('기록 서버 연결 후 이름을 바꿔 주세요. 기존 이름과 계정은 유지돼요.');
-      sdk=sdk||await firebase();
-      if(!sdk.auth.currentUser||sdk.auth.currentUser.uid!==profile.uid)
-        throw new Error('기존 기록 계정으로 다시 로그인해 주세요. 이름만으로 다른 계정에 연결하지 않아요.');
-      const p=await api('profile',{nickname,consent:true,consentVersion:cfg.consentVersion},'POST');
-      notifyProfile({...profile,...p,online:true,uid:profile.uid});
+      const nickname=readNick(),online=!!consent.checked;
+      save.disabled=true;message.textContent=online?'닉네임을 기록판에 연결 중이에요…':'이 브라우저에 닉네임을 저장 중이에요…';
+      if(online){
+        const p=await api('profile',{nickname,consent:true,consentVersion:'2026-09-30'},'POST');
+        notifyProfile({...p,online:true,uid:playerId()});
+      }else notifyProfile({...profile,nickname,online:false,uid:playerId()});
     }catch(e){message.textContent=friendly(e);save.disabled=false;}
   });
   actions.append(save);body.append(actions,message);
-  const onlineArea=el('div');body.append(onlineArea);
-  const waiting=el('p','기록판 연결 상태를 확인하고 있어요. 닉네임 저장은 먼저 할 수 있어요.','sr47-muted');onlineArea.append(waiting);
-  body.append(el('p','별명은 로그인 비밀번호가 아니에요. Google 연결과 기록 공개 동의는 선택 사항이에요.','sr47-muted'));
+  body.append(el('div','사진은 서버에 올리지 않아요. 기록판에는 닉네임·코스·최고 기록·점수·아이템 수만 보여요. 이 브라우저는 내부 식별값으로 같은 참여자를 구분해요.','sr47-note'));
   nick.focus();nick.select();
-  cfg=await config();if(!d.isConnected)return;
-  waiting.remove();
-  const note=el('div','','sr47-note');note.textContent=cfg.enabled?
-    '공개: 닉네임·코스·최고기록·점수·아이템 수·게임 순위\n내부 보관: 로그인 식별자, 진행 확인, 완주 이력, 동의 시각\nGoogle 계정의 이메일은 공개 기록판에 표시하지 않아요.\n보관: '+cfg.retentionNotice+'\n문의: '+cfg.contactText+
-    '\n사진은 서버로 올리지 않아요. 기록판에서 내 기록 삭제가 가능해요.':
-    '온라인 기록판은 준비 중이에요. 이 이름은 이 브라우저와 완주 사진에 먼저 적용돼요. Firebase 연결 후 별도 동의하여 기록판에 참여할 수 있어요.';
-  onlineArea.append(note);
-  if(!cfg.enabled)return;
-  const consentLabel=el('label'),consent=el('input');consent.type='checkbox';
-  consentLabel.append(consent,document.createTextNode('닉네임과 게임 기록의 저장·공개에 동의해요. (선택)'));onlineArea.append(consentLabel);
-  const loginActions=el('div','','sr47-actions');
-  const finishLogin=async()=>{
-    const p=await api('profile',{nickname:readNick(),consent:true,consentVersion:cfg.consentVersion},'POST');
-    notifyProfile({...p,online:true,uid:sdk.auth.currentUser.uid});
-  };
-  const anon=button('닉네임으로 기록판 참여',async()=>{
-    try{if(!consent.checked)throw new Error('온라인 참여에는 기록 공개 동의가 필요해요.');readNick();anon.disabled=google.disabled=true;
-      if(!sdk.auth.currentUser)await sdk.authMod.signInAnonymously(sdk.auth);await finishLogin();
-    }catch(e){message.textContent=friendly(e);anon.disabled=google.disabled=false;}
-  });
-  const google=button('Google로 기록 이어가기',async()=>{
-    try{if(!consent.checked)throw new Error('기록 공개 동의를 먼저 확인해 주세요.');readNick();anon.disabled=google.disabled=true;
-      const provider=new sdk.authMod.GoogleAuthProvider();
-      if(sdk.auth.currentUser?.isAnonymous){
-        try{await sdk.authMod.linkWithPopup(sdk.auth.currentUser,provider);}
-        catch(e){if(e.code!=='auth/credential-already-in-use')throw e;
-          if(!window.confirm('기존 Google 계정으로 전환할까요? 현재 임시 기록은 자동 병합되지 않습니다.'))throw new Error('계정 연결을 취소했어요.');
-          const credential=sdk.authMod.GoogleAuthProvider.credentialFromError(e);
-          if(credential)await sdk.authMod.signInWithCredential(sdk.auth,credential);else throw e;
-        }
-      }else await sdk.authMod.signInWithPopup(sdk.auth,provider);
-      await finishLogin();
-    }catch(e){message.textContent=friendly(e);anon.disabled=google.disabled=false;}
-  },'soft');
-  anon.disabled=google.disabled=true;loginActions.append(anon,google);onlineArea.append(loginActions);
-  if(profile.online){
-    onlineArea.append(button('이번에는 온라인 등록 없이 플레이',()=>{
-      try{notifyProfile({...profile,nickname:readNick(),online:false});}catch(e){message.textContent=friendly(e);}
-    },'outline'));
-  }
-  try{sdk=await firebase();if(d.isConnected)anon.disabled=google.disabled=false;}
-  catch(e){message.textContent=friendly(e)+' 닉네임으로 자유 플레이는 가능해요.';}
 }
-
 function beginRun(payload){
   lastResult=null;lastOutcome=null;me=null;
-  const thisRun={...payload,uid:profile.uid,chain:Promise.resolve(),online:profile.online,error:null};run=thisRun;
+  const thisRun={...payload,uid:playerId(),chain:Promise.resolve(),online:profile.online!==false,error:null};run=thisRun;
   if(!thisRun.online){status('자유 플레이 · 사진 저장 가능');return;}
   status('기록 시작 확인 중…');
   thisRun.chain=(async()=>{
     const c=await config();thisRun.event=c.event;
+    if(!c.enabled){thisRun.online=false;status('기록판 연결 대기 · 자유 플레이 가능');return;}
     if(c.acceptResults===false){thisRun.online=false;status('기록 열람 기간 · 자유 플레이와 사진 저장 가능');return;}
-    const s=await firebase();
-    if(s.auth.currentUser?.uid!==thisRun.uid)throw new Error('계정이 바뀌었어요. 새로 참여해 주세요.');
+    await api('profile',{nickname:profile.nickname||DEFAULT_NICKNAME48,consent:true,consentVersion:c.consentVersion},'POST');
     await api('start',{clientRunId:thisRun.clientRunId,course:payload.course,ruleset:payload.ruleset},'POST');
     status('온라인 기록 확인 중');
   })().catch(e=>{thisRun.error=friendly(e);status(thisRun.error);});
@@ -116,8 +68,8 @@ function checkpoint(payload){
   r.chain=r.chain.then(async()=>{if(r.error)return;try{await api('checkpoint',payload,'POST');}catch(e){r.error=friendly(e);status('중간 연결 확인이 필요해요. 완주는 계속할 수 있어요.');}});
 }
 async function retrySubmit(item){
-  const s=await firebase(),c=await config();
-  if(s.auth.currentUser?.uid!==item.uid||c.event!==item.event)throw new Error('기록을 시작한 계정과 행사로 다시 접속해 주세요.');
+  const c=await config();
+  if(c.event!==item.event)throw new Error('기록을 시작한 행사와 다른 설정이에요.');
   const outcome=await api('finish',{clientRunId:item.clientRunId,result:item.result},'POST');
   local.remove('pending');lastOutcome=outcome;status(outcome.message);
   try{me=await api('me',{course:item.result.course});status(outcome.message+(me.rank?' · 실제 참여자 '+me.rank+'위':''));}catch{}
@@ -188,7 +140,7 @@ async function receiveImage(bytes,payload){
   }catch(e){status(friendly(e));send('OnCaptureReady','');}
 }
 function openBoard(){const d=modal('실제 참여자 기록판','sr47-board');const f=el('iframe');f.title='실제 참여자 기록판';f.src=new URL('leaderboard.html',location.href).href;d.append(f);}
-window.SR47={attachUnity(u){unity=u;send('OnProfile',{...profile,silent:true});},dispatch(action,json){let data={};try{data=JSON.parse(json||'{}');}catch{}
+window.SR47={attachUnity(u){unity=u;profile=loadProfile48();send('OnProfile',{...profile,silent:true});},setProfileFromStart(p){profile={...profile,...p,uid:playerId()};local.set('profile',profile);send('OnProfile',{...profile,silent:true});},dispatch(action,json){let data={};try{data=JSON.parse(json||'{}');}catch{}
   if(action==='profileRead48')send('OnProfile',{...profile,silent:true});else if(action==='profile')openProfile();else if(action==='start')beginRun(data);else if(action==='checkpoint')checkpoint(data);else if(action==='finish')finish(data);else if(action==='board')openBoard();
 },receiveImage(bytes,json){let p;try{p=JSON.parse(json);}catch{return;}receiveImage(bytes,p);}};
 if(window.sunsetUnity)unity=window.sunsetUnity;
