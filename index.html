@@ -196,10 +196,21 @@
         } catch (err) {}
       }
       startBtn.addEventListener("click", start);
-      overlay.addEventListener("touchend", function (e) { if (overlay.classList.contains("sr-ready")) start(e); }, { passive: false });
-      overlay.addEventListener("click", function (e) { if (overlay.classList.contains("sr-ready") && e.target !== startBtn) start(e); });
+      overlay.addEventListener("touchend", function (e) {
+        if (!overlay.classList.contains("sr-ready") || playerStart.contains(e.target)) return;
+        start(e);
+      }, { passive: false });
+      overlay.addEventListener("click", function (e) {
+        if (!overlay.classList.contains("sr-ready") || e.target === startBtn || playerStart.contains(e.target)) return;
+        start(e);
+      });
       document.addEventListener("keydown", function (e) {
-        if (overlay.classList.contains("sr-ready") && !overlay.classList.contains("sr-hide") && (e.key === "Enter" || e.key === " ")) start(e);
+        if (!overlay.classList.contains("sr-ready") || overlay.classList.contains("sr-hide")) return;
+        if (e.target === nicknameInput) {
+          if (e.key === "Enter") start(e);
+          return;
+        }
+        if (e.key === "Enter" || e.key === " ") start(e);
       });
 
       var script = document.createElement("script");
