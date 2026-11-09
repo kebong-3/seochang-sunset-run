@@ -41,12 +41,17 @@
         <div id="sr-bar"><div id="sr-fill"></div></div>
         <div id="sr-pct">불러오는 중… 0%</div>
       </div>
+      <div id="sr-load-error" hidden>
+        <p id="sr-load-error-message" role="alert"></p>
+        <a id="sr-retry-low" href="?q=low" hidden>절약 화질로 다시 열기</a>
+        <a href="leaderboard.html?demo=1">예시 기록판 보기</a>
+      </div>
       <div id="sr-player-start" hidden style="margin:12px auto 4px;max-width:360px;text-align:left">
         <label for="sr-nickname" style="display:block;font-size:12px;font-weight:800;margin-bottom:6px">러닝 닉네임</label>
         <input id="sr-nickname" maxlength="12" value="억새해오니" autocomplete="nickname"
           style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #d7c8dc;border-radius:12px;font-size:16px;background:#fff;color:#31263d">
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:11px;line-height:1.5">
-          <input id="sr-rank-consent" type="checkbox" checked style="margin-top:2px">
+          <input id="sr-rank-consent" type="checkbox" style="margin-top:2px">
           <span>닉네임과 완주 기록을 실제 참여자 순위에 공개할게요.</span>
         </label>
       </div>
@@ -72,6 +77,9 @@
       var nicknameInput = document.querySelector("#sr-nickname");
       var rankConsent = document.querySelector("#sr-rank-consent");
       var loading = document.querySelector("#sr-loading");
+      var loadError = document.querySelector("#sr-load-error");
+      var loadErrorMessage = document.querySelector("#sr-load-error-message");
+      var retryLow = document.querySelector("#sr-retry-low");
       var tip = document.querySelector("#sr-tip");
       var warningBanner = document.querySelector("#unity-warning");
       try {
@@ -108,6 +116,37 @@
       ];
       var tipIdx = 0;
       var tipTimer = setInterval(function () { tipIdx = (tipIdx + 1) % tips.length; tip.textContent = tips[tipIdx]; }, 2800);
+      var startupComplete = false;
+      var startupFailed = false;
+
+      function showLoadError(message, canRetryLow) {
+        if (startupFailed) return;
+        startupFailed = true;
+        clearInterval(tipTimer);
+        loading.hidden = true;
+        tip.hidden = true;
+        loadErrorMessage.textContent = message;
+        retryLow.hidden = !canRetryLow;
+        loadError.hidden = false;
+      }
+
+      // The Unity build requires WebGL 2 at every quality level.
+      function supportsWebGL2() {
+        try {
+          var gl = document.createElement("canvas").getContext("webgl2");
+          if (!gl) return false;
+          var release = gl.getExtension("WEBGL_lose_context");
+          if (release) release.loseContext();
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      if (typeof WebAssembly !== "object" || typeof WebAssembly.compile !== "function" || !supportsWebGL2()) {
+        showLoadError("이 환경에서는 3D 게임을 시작할 수 없어요. WebGL 2와 WebAssembly가 작동하는 최신 브라우저 또는 다른 기기에서 열어 주세요.", false);
+        return;
+      }
 
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/11.loader.js";
@@ -120,7 +159,14 @@
         companyName: "전남광주통합특별시 서구",
         productName: "SUNSET RUN 2026 광주서창억새노을마라톤",
         productVersion: "0.1.0",
-        showBanner: unityShowBanner,
+        showBanner: function (message, type) {
+          if (type === "error" && !startupComplete) {
+            showLoadError("게임 데이터를 읽지 못했어요. 인터넷 연결과 배포본의 Build 폴더를 확인해 주세요.", false);
+            console.error("SUNSET RUN startup failed:", message);
+            return;
+          }
+          unityShowBanner(message, type);
+        },
         // v4.9: 선택한 화질의 픽셀 상한으로 직접 크기를 계산. 모바일 강제 저화질 없음
         matchWebGLToCanvasSize: false,
         // 불투명 캔버스: 게임 화면의 반투명(알파) 부분이 웹페이지 배경과 섞여 색이 빠지는 문제 방지
@@ -129,8 +175,7 @@
       };
 
       if (!window.SR49) {
-        clearInterval(tipTimer);
-        unityShowBanner("화질 설정 파일을 찾지 못했어요. 새 빌드의 Quality 폴더와 index.html을 함께 올려 주세요.", "error");
+        showLoadError("화질 설정 파일을 읽지 못했어요. 배포본의 Quality 폴더를 확인해 주세요.", false);
         return;
       }
       window.SR49.prepare(canvas,container); isMobile=window.SR49.isMobile;
@@ -142,13 +187,6 @@
       document.addEventListener("dblclick", function (e) { e.preventDefault(); }, { passive: false });
       canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
       document.addEventListener("touchmove", function (e) { if (e.target === canvas) e.preventDefault(); }, { passive: false });
-
-      // WebGL 미지원 안내
-      (function () {
-        var c = document.createElement("canvas");
-        var ok = !!(window.WebGL2RenderingContext && c.getContext("webgl2")) || !!(c.getContext("webgl"));
-        if (!ok) unityShowBanner("이 브라우저는 WebGL 을 지원하지 않아요. 최신 크롬·사파리·엣지에서 열어 주세요.", "error");
-      })();
 
       var instance = null;
       function setProgress(p) {
@@ -217,7 +255,13 @@
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = function () {
+        if (typeof createUnityInstance !== "function") {
+          showLoadError("게임 시작 파일을 실행하지 못했어요. 게임 파일을 확인한 뒤 다시 열어 주세요.", false);
+          return;
+        }
         createUnityInstance(canvas, config, setProgress).then(function (unityInstance) {
+          if (startupFailed) return;
+          startupComplete = true;
           instance = unityInstance;
           if (window.SR49) window.SR49.attachUnity(unityInstance);
           window.sunsetUnity = unityInstance;
@@ -225,10 +269,13 @@
           setProgress(1);
           showStart();
         }).catch(function (message) {
-          unityShowBanner("게임을 불러오지 못했어요: " + message, "error");
+          showLoadError("게임을 불러오지 못했어요. 인터넷과 브라우저 그래픽 설정을 확인한 뒤 다시 열어 주세요.", window.SR49.mode !== 0);
+          console.error("SUNSET RUN startup failed:", message);
         });
       };
-      script.onerror = function () { unityShowBanner("게임 파일을 찾을 수 없어요(Build 폴더 확인).", "error"); };
+      script.onerror = function () {
+        showLoadError("게임 파일을 내려받지 못했어요. 인터넷 연결과 배포본의 Build 폴더를 확인해 주세요.", false);
+      };
       document.body.appendChild(script);
     })();
   </script>

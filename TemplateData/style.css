@@ -66,6 +66,13 @@ html, body {
   transition: width .2s ease;
 }
 #sr-pct { margin-top: 8px; font-weight: 700; font-size: clamp(13px, 2.2vmin, 17px); text-shadow: 0 1px 3px rgba(60, 20, 60, .6); }
+#sr-load-error {
+  max-width: min(75vw, 460px); padding: 8px 14px; border-radius: 12px;
+  background: #fff9ee; color: #31263d; font-size: 14px; line-height: 1.5;
+}
+#sr-load-error p { margin: 0 0 4px; }
+#sr-load-error a { color: #40318a; font-weight: 700; }
+#sr-load-error a + a { margin-left: 8px; }
 
 #sr-start {
   min-width: 240px; min-height: 64px; padding: 12px 28px; margin-top: .4vh;
